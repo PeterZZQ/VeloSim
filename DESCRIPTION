@@ -1,0 +1,29 @@
+Package: VeloSim
+Title: Simulate Single Cell RNA Sequencing Data with RNA velocity (One Line, Title Case)
+Version: 0.0.0.9000
+Authors@R: 
+    c(person(given = "Ziqi",
+             family = "Zhang",
+             role = c("aut", "cre"),
+             email = "ziqi.zhang@gatech.edu",
+             comment = c(ORCID = "0000-0002-8198-0260")),
+      person(given = "Xiuwei",
+             family = "Zhang",
+             role = "aut",
+             email = "xiuwei.zhang@gatech.edu",
+             comment = c(ORCID = "0000-0002-1713-772X")))
+Description: This package simulates single cell RNA sequencing data during cell developmental process, the simulation includes unspliced RNA count, spliced RNA count, RNA velocity and cell developmental pseudo-time. The simulation can be used to benchmark computational methods including trajectory inference and RNA velocity inference.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Depends:
+    R (>= 3.5.0),
+    plyr,
+    ggplot2, 
+    umap
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

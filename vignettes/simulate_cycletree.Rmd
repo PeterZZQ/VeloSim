@@ -1,0 +1,97 @@
+---
+title: "simulate_cycletree"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{simulate_cycletree}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(VeloSim)
+```
+
+## Step 1: Define the simulation parameters
+```{r params_setting}
+# number of total cells
+ncells_total <- 1000
+# number of cell in cell-cycle stage
+ncells_cycle <- 300
+# number of total genes
+ngenes <- 100
+# total number of evfs: homo-evf + diff-evf
+nevf <- 20
+# number of diff-evf
+n_de_evf <- 12
+# which kinetic parameters is changed according to the sampling position, n_de_evf is used in s
+vary <- "all"
+# the standard deviation of the gaussian distribution, denote the noise size
+Sigma <- 0.4
+# the mean of the homo-evf, gaussian distribution again
+evf_center <- 1
+# with which probability the gene effect value is preserved
+gene_effect_prob <- 0.3
+# the mean of the gaussian distribution of gene effect
+geffect_mean <- 0
+# the standard deviation of the gaussian distribution of gene effect
+gene_effects_sd <- 1
+# the real data to obtain the kinetic parameter distribution from
+param_realdata <- "zeisel.imputed"
+
+bimod <- 0
+scale_s <- 1
+randseed <- 2
+# number of cells to be removed at the beginning of the simulation
+n_unstable <- 10
+# number of cells in the second cycle
+nextra <- 5
+
+# read in tree
+phyla <- ape::read.tree(system.file("extdata", "Newick_ABCD.txt", package = "VeloSim"))
+par(mfrow=c(1,2))
+plot(phyla)
+```
+
+## Step 2: Simulate data according to the parameters
+`SimulateVeloTree` is the main function of VeloSim. This function is designed specifically for tree-like trajectory structure, user can generate the unspliced, spliced counts, true developmental time and true RNA velocity and kinetic parameters using this function.
+```{r simulation}
+# simulate data
+result_true <- SimulateCycleTree(ncells_total=ncells_total, ncells_cycle = ncells_cycle, ngenes=ngenes, evf_center=1,nevf=nevf,
+                                  randseed=randseed, n_de_evf=n_de_evf,vary=vary,Sigma=Sigma, phyla = phyla,
+                                  geffect_mean=geffect_mean,gene_effects_sd=gene_effects_sd,
+                                  gene_effect_prob=gene_effect_prob,bimod=bimod,param_realdata=param_realdata,
+                                  scale_s=scale_s, prop_hge=0.015, mean_hge=5, n_unstable=n_unstable, nextra=nextra)
+
+# add technical noise
+result <- technicalNoise(result_true, capture.rate = 0.2)
+```
+
+## Step 3: Store the result
+Store the unspliced count, spliced count, cell developmental time and RNA velocity
+```{r save_file}
+# unspliced count
+write.table(result$counts_u, file = "./counts_u.csv")
+# spliced count
+write.table(result$counts_s, file = "./counts_s.csv")
+# cell developmental time
+write.table(result$cell_time, file = "./pseudo_time.csv")
+# RNA velocity
+write.table(result$velocity, file = "./velocity.csv")
+```
+
+## Step 4: Plot the result
+```{r plotting}
+# Plot with cell developmental time(pseudo-time), default PCA
+plotPseudotime(filename = "pseudotime.pdf", result)
+# Plot with RNA velocity
+plotVelo(filename = "velocity.pdf", result, arrow.length = 0.1)
+# Plot with cell developmental time(pseudo-time), using UMAP
+plotPseudotime(filename = "pseudotime_umap.pdf", result, dr = "umap")
+```
