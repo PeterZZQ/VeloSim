@@ -18,7 +18,7 @@ devtools::install_github("PeterZZQ/VeloSim")
 
 To learn more about using VeloSim for simulation, please check out three example vignettes below:
 
-* Simulation for cell cycle trajectory
-* Simulation for tree-like trajectory
-* Simulation for Cycle-tree trajectory
+* [Simulation for cell cycle trajectory](https://github.com/PeterZZQ/VeloSim/blob/master/vignettes/simulate_cycle.Rmd)
+* [Simulation for tree-like trajectory](https://github.com/PeterZZQ/VeloSim/blob/master/vignettes/simulate_tree.Rmd)
+* [Simulation for Cycle-tree trajectory](https://github.com/PeterZZQ/VeloSim/blob/master/vignettes/simulate_cycletree.Rmd)
 
