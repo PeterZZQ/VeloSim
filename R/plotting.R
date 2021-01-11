@@ -59,7 +59,9 @@ plotPseudotime <- function(filename, result, dr = "pca", width = 15, height = 15
     x_dr <- as.data.frame(pca_res$x)
     x_dr$cell_time <- cell_time
   } else if(dr == "umap") {
-    umap_res <- umap(d=t(log1p(counts_s)))
+    config = umap.defaults
+    config$n_neighbors = 30
+    umap_res <- umap(d=t(log1p(counts_s)), config = config)
     x_dr <- as.data.frame(umap_res$layout)
     colnames(x_dr) <- c("PC1", "PC2")
     x_dr$cell_time <- cell_time

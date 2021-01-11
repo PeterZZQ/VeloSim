@@ -405,7 +405,7 @@ GenerateForwardEVF <- function(ncells,n_nd_evf,n_de_evf, depth=1,
 
     return(evfs)
   })
-  return(list(evfs, as.data.frame(list(pop = rep("cycle", ncells)))))
+  return(list(evfs, as.data.frame(list(pop = rep("cycle", ncells), depth = rep(0.0, ncells)))))
 }
 
 #' Generating second half cycle of EVFs for cells sampled along cycle trajectory
@@ -504,7 +504,7 @@ GenerateBackwardEVF <- function(evf_res, n_nextra, n_nd_evf,n_de_evf,
 
   names(evfs) <- c("k_on", "k_off", "s")
 
-  return(list(evfs, as.data.frame(list(pop = rep("cycle", dim(evfs[["k_on"]])[1])))))
+  return(list(evfs, as.data.frame(list(pop = rep("cycle", dim(evfs[["k_on"]])[1]), depth = rep(0.0, dim(evfs[["k_on"]])[1])))))
 
 }
 

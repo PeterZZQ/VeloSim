@@ -27,7 +27,9 @@ gen_1branch <- function(kinet_params, start_state, start_s, start_u, randpoints1
 
   kinet_params1 <- list(k_on=kinet_params$k_on, k_off=kinet_params$k_off, s=kinet_params$s,
                         beta=beta_vec, d=d_vec)
-
+  xs <- list()
+  ys <- list()
+  which_cells <- list()
 
   for (igene in 1:ngenes){
     k_on <- kinet_params1[["k_on"]][igene,1]; k_off <- kinet_params1[["k_off"]][igene,1];
@@ -41,6 +43,7 @@ gen_1branch <- function(kinet_params, start_state, start_s, start_u, randpoints1
     nsteps <- ceiling(totaltime/stepsize)
     x <- numeric(nsteps); x[1] <- start_u[igene]
     y <- numeric(nsteps); y[1] <- start_s[igene]
+    # which_cell stores with length nsteps stores the cell correspond to current time step.
     which_cell <- numeric(nsteps); which_cell[1] <- 1
     curr_time <- numeric(nsteps);
     p_table <- matrix(0, 2, 2)
@@ -59,7 +62,7 @@ gen_1branch <- function(kinet_params, start_state, start_s, start_u, randpoints1
         k_off <- kinet_params1[["k_off"]][igene, which_cell[t]];
         s <- kinet_params1[["s"]][igene, which_cell[t]];
 
-        # check npart code here, on p_table
+        # check npart code here, on p_table, update the step size
         cycle_length <- 1/k_on + 1/k_off
         min_wtime <- min(1/k_on, 1/k_off)
         npart <- max(ceiling(cycle_length/min_wtime)*2, cycle_length*2)
@@ -80,6 +83,8 @@ gen_1branch <- function(kinet_params, start_state, start_s, start_u, randpoints1
       y[t] <- y[t-1] + beta*x[t-1]*stepsize - d*y[t-1]*stepsize
       if (y[t] < 0) {y[t] <- 0}
     }
+
+    xs[[igene]] <- x; ys[[igene]] <- y; which_cells[[igene]] <- which_cell
     # extract value for each cell
     for (icell in 1:ncells1){
       all_idx <- which(which_cell == icell)
@@ -95,7 +100,12 @@ gen_1branch <- function(kinet_params, start_state, start_s, start_u, randpoints1
   ncells2rm <- 0
   velo_mat <- beta_vec*counts_u1 - d_vec*counts_s1
 
-  return(list(counts_u = counts_u1, counts_s=counts_s1, kinet_params=kinet_params1, state_mat=state_mat, cell_time=cell_time, velocity=velo_mat))
+  dynamics <- list()
+  dynamics[["unspliced_steps"]] <- xs
+  dynamics[["spliced_steps"]] <- ys
+  dynamics[["which_cells"]] <- which_cells
+
+  return(list(counts_u = counts_u1, counts_s=counts_s1, kinet_params=kinet_params1, state_mat=state_mat, cell_time=cell_time, velocity=velo_mat, dynamics=dynamics))
 }
 
 
@@ -133,7 +143,7 @@ includeHge <- function(prop_hge=0.015, mean_hge=5, params){
 
   } else {chosen_hge <- NULL}
 
-  return(params)
+  return(list(params = params, chosen_hge = chosen_hge))
 }
 
 
@@ -208,12 +218,12 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
   names(params) <- c("k_on", "k_off", "s")
 
   # update the kinetic value of the highly expressed genes
-  if(prop_hge != 0){
-    params <- includeHge(prop_hge=prop_hge, mean_hge=mean_hge, params)
-  }
+  hge <- includeHge(prop_hge=prop_hge, mean_hge=mean_hge, params)
+  chosen_hge <- hge[["chosen_hge"]]
+  params <- hge[["params"]]
 
   # degradation rate of the size ngenes * 1
-  d_vec <- rnorm(n=ngenes, mean=0.8, sd=0.1)
+  d_vec <- rnorm(n=ngenes, mean=0.4, sd=0.1)
   # splicing rate of the size ngenes * 1
   beta_vec <- rnorm(n=ngenes, mean=0.8, sd=0.1)
 
@@ -235,11 +245,13 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
     index <- which(evf_res[[2]]$pop == pop)
     # the index is ordered according to depth originally
     end_cell <- c(end_cell, index[length(index)])
-    branches <- rbind(branches, as.numeric(strsplit(pop, split ="_")[[1]]))
+    new_branch <- as.numeric(strsplit(pop, split ="_")[[1]])
+    branches <- rbind(branches, new_branch)
     num_cells <- c(num_cells,length(index))
   }
   # create a backbone_info matrix
   backbone <- cbind(start_node=branches[,1], end_node = branches[,2], end_cell = end_cell, start_cell = rep(0, length(end_cell)), num_cells = num_cells)
+  # print(backbone)
 
   for(i in 1:dim(backbone)[1]){
     if(backbone[i,"start_node"] == root){
@@ -249,10 +261,8 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
       backbone[i,"start_cell"] <- backbone[index,"end_cell"]
     }
   }
-  # order backbone according to the start cells, in case the start cells are always generated
-  backbone <- backbone[order(backbone[,"start_cell"]),,drop = FALSE]
 
-
+  # print(backbone)
   # generate counts
   # unspliced counts matrix
   counts_u <- vector()
@@ -260,6 +270,10 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
   counts_s <- vector()
   # cell developmental time
   cell_time <- vector()
+  # count step changes
+  steps_u <- vector()
+  steps_s <- vector()
+  which_cells <- vector()
   # promoter states
   state_mat <- vector()
   # RNA velocity
@@ -307,6 +321,11 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
     counts_u <- cbind(counts_u, result$counts_u)
     counts_s <- cbind(counts_s, result$counts_s)
     state_mat <- cbind(state_mat, result$state_mat)
+
+    steps_s <- cbind(steps_s, result$dynamics[["spliced_steps"]])
+    steps_u <- cbind(steps_u, result$dynamics[["unspliced_steps"]])
+    which_cells <- cbind(which_cells, result$dynamics[["which_cells"]])
+
     # true time of each cell, start from zero for each branch, need to update when merged together
     cell_time <- c(cell_time, result$cell_time + start_cell_time)
     velocity <- cbind(velocity, result$velocity)
@@ -320,7 +339,11 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
   final_kinetics <- list(k_on = params[[1]][,-cells2rm], k_off = params[[2]][,-cells2rm],
                          s = params[[3]][,-cells2rm], beta = beta_vec, degrade = d_vec)
 
-  return(list(counts_u = counts_u, counts_s=counts_s, kinet_params=final_kinetics, state_mat=state_mat, cell_time=cell_time, velocity=velocity))
+  dynamics <- list(unspliced_steps = steps_u, spliced_steps = steps_s, which_cells = which_cells)
+
+  return(list(counts_u = counts_u, counts_s=counts_s, kinet_params=final_kinetics, state_mat=state_mat,
+              cell_time=cell_time, velocity=velocity, dynamics=dynamics,
+              backbone = evf_res[[2]]$pop[-cells2rm], chosen_hge = chosen_hge))
 }
 
 
@@ -351,7 +374,7 @@ SimulateVeloTree <- function(ncells_total, ngenes, start_s = NULL, start_u = NUL
 #' @import phytools
 #' @export
 SimulateVeloCycle <- function(ncells_total, ngenes, start_s = NULL, start_u = NULL, start_state = NULL, evf_center=1,nevf=20,
-                              randseed, n_de_evf=12,vary='s',Sigma=0.1,
+                              randseed, n_de_evf=12,vary='all',Sigma=0.1,
                               geffect_mean=0,gene_effects_sd=1,gene_effect_prob=0.3,
                               bimod=0,param_realdata="zeisel.imputed",scale_s=1,
                               prop_hge=0.015, mean_hge=5, nextra=0, n_unstable=25,
@@ -365,7 +388,7 @@ SimulateVeloCycle <- function(ncells_total, ngenes, start_s = NULL, start_u = NU
 
 
   evf_res <- GenerateCycleEVF(ncells_total, nextra, n_unstable, nevf,
-                              n_de_evf, vary = "all", depth = 10, evf_center = evf_center, Sigma = Sigma, seed = seed[1])
+                              n_de_evf, vary = vary, depth = 10, evf_center = evf_center, Sigma = Sigma, seed = seed[1])
 
   if(plot == TRUE){
     plotEVF(evf_res, width = 15, height = 15, units = "in", dpi = 1000)
@@ -398,9 +421,9 @@ SimulateVeloCycle <- function(ncells_total, ngenes, start_s = NULL, start_u = NU
   names(params) <- c("k_on", "k_off", "s")
 
   # update the kinetic value of the highly expressed genes
-  if(prop_hge != 0){
-    params <- includeHge(prop_hge=prop_hge, mean_hge=mean_hge, params)
-  }
+  hge <- includeHge(prop_hge=prop_hge, mean_hge=mean_hge, params)
+  chosen_hge <- hge[["chosen_hge"]]
+  params <- hge[["params"]]
 
   # degradation rate of the size ngenes * 1
   d_vec <- rnorm(n=ngenes, mean=0.8, sd=0.1)
@@ -427,8 +450,11 @@ SimulateVeloCycle <- function(ncells_total, ngenes, start_s = NULL, start_u = NU
   final_kinetics <- list(k_on = result$kinet_params$k_on, k_off = result$kinet_params$k_off,
                          s = result$kinet_params$s, beta = result$kinet_params$beta, degrade = result$kinet_params$d)
 
+  dynamics <- list(unspliced_steps = result$dynamics[["unspliced_steps"]], spliced_steps = result$dynamics[["spliced_steps"]], which_cells = result$dynamics[["which_cells"]])
 
-  return(list(counts_u = result$counts_u, counts_s=result$counts_u, kinet_params=final_kinetics, state_mat=result$state_mat, cell_time=result$cell_time, velocity=result$velocity))
+  return(list(counts_u = result$counts_u, counts_s=result$counts_u, kinet_params=final_kinetics, state_mat=result$state_mat,
+              cell_time=result$cell_time, velocity=result$velocity, dynamics=dynamics,
+              backbone = evf_res[[2]]$pop, chosen_hge = chosen_hge))
 }
 
 #' Generate both evf and gene effect and simulate true transcript counts, cycle-tree structure
@@ -458,35 +484,232 @@ SimulateCycleTree <- function(ncells_total, ncells_cycle, ngenes, evf_center=1, 
                               phyla, randseed, n_de_evf=12, vary="s", Sigma=0.1,
                               geffect_mean=0, gene_effects_sd=1, gene_effect_prob=0.3,
                               bimod=0, param_realdata="zeisel.imputed",scale_s=1,
-                              prop_hge=0.015, mean_hge=5, nextra=0, n_unstable=25){
+                              prop_hge=0.015, mean_hge=5, nextra=0, n_unstable=25, plot = TRUE,
+                              start_s = NULL, start_u = NULL, start_state = NULL, is_in_module){
 
-  result_cycle <- SimulateVeloCycle(ncells_total=ncells_cycle,ngenes=ngenes, evf_center=evf_center, nevf=nevf,
-                                    randseed=randseed, n_de_evf=n_de_evf,vary=vary,Sigma=Sigma,
-                                    geffect_mean=geffect_mean,gene_effects_sd=gene_effects_sd,
-                                    gene_effect_prob=gene_effect_prob,bimod=bimod,param_realdata=param_realdata,
-                                    scale_s=scale_s, prop_hge=prop_hge, mean_hge=mean_hge, nextra = nextra, n_unstable=n_unstable, plot = FALSE)
+  if(nextra < 0 | nextra >= (ncells_cycle-n_unstable)/2 | n_unstable < 0 | n_unstable >= ncells_cycle){
+    stop("nextra should be selected from [0, (ncells_total-n_unstable)/2), and n_unstable from [0, ncells_total)")
+  }
 
-  result_tree <- SimulateVeloTree(ncells_total=ncells_total-ncells_cycle,ngenes=ngenes,
-                                  start_s = result_cycle$counts_s[,ncells_cycle - n_unstable],
-                                  start_u = result_cycle$counts_u[,ncells_cycle - n_unstable],
-                                  start_state = result_cycle$state_mat[, ncells_cycle - n_unstable],evf_center=1,nevf=nevf,
-                                  phyla=phyla, randseed=randseed, n_de_evf=n_de_evf,vary=vary,Sigma=Sigma,geffect_mean=geffect_mean,
-                                  gene_effects_sd=gene_effects_sd,gene_effect_prob=gene_effect_prob,
-                                  bimod=bimod,param_realdata=param_realdata,scale_s=scale_s,
-                                  prop_hge=prop_hge, mean_hge=mean_hge, n_unstable=0, plot = FALSE)
+  set.seed(randseed)
+  seed <- sample(c(1:1e5),size=2)
+
+  evf_res_cycle <- GenerateCycleEVF(ncells_cycle, nextra, n_unstable, nevf,
+                              n_de_evf, vary = vary, depth = 10, evf_center = evf_center, Sigma = Sigma, seed = seed[1])
+
+  evf_res_tree <- ContinuousEVF(phyla,ncells_total-ncells_cycle,n_nd_evf=nevf-n_de_evf,n_de_evf=n_de_evf,
+                           evf_center=evf_center,vary=vary,
+                           Sigma=Sigma,seed=seed[1])
+
+  ncells_cycle = dim(evf_res_cycle[[1]]$k_on)[1]
+  ncells_tree = dim(evf_res_tree[[1]]$k_on)[1]
+
+  evf_res <- list(list(k_on = rbind(evf_res_cycle[[1]]$k_on, evf_res_tree[[1]]$k_on), k_off = rbind(evf_res_cycle[[1]]$k_off, evf_res_tree[[1]]$k_off),
+                  s = rbind(evf_res_cycle[[1]]$s, evf_res_tree[[1]]$s)), rbind(evf_res_cycle[[2]], evf_res_tree[[2]]))
+
+  if(plot == TRUE){
+    plotEVF(evf_res, width = 15, height = 15, units = "in", dpi = 1000)
+  }
+
+  # assign modules automatically and return module idx for genes.
+  is_in_module <- numeric(ngenes)
+
+  # generate the gene effect matrix
+  gene_effects <- GeneEffects(ngenes=ngenes,nevf=nevf,randseed=seed[2],prob=gene_effect_prob,
+                              geffect_mean=geffect_mean,geffect_sd=gene_effects_sd, evf_res=evf_res, is_in_module=is_in_module)
+
+  # match distribution and generate kinetic values: kon, koff, s, beta, d
+  if(!is.null(param_realdata)){
+    if(param_realdata=="zeisel.imputed"){
+      data(param_realdata.zeisel.imputed)
+    } else {stop("wrong input for parameter param_realdata")}
+
+    match_params[,1]=log(base=10,match_params[,1])
+    match_params[,2]=log(base=10,match_params[,2])
+    match_params[,3]=log(base=10,match_params[,3])
+    match_params_den <- lapply(c(1:3),function(i){
+      density(match_params[,i],n=2000)
+    })
+    params <- Get_params(gene_effects,evf_res[[1]],match_params_den,bimod,scale_s=scale_s)
+  }else{
+    params <- Get_params2(gene_effects,evf_res[[1]],bimod,ranges)
+  }
+  # kinetic params
+  names(params) <- c("k_on", "k_off", "s")
+
+  # update the kinetic value of the highly expressed genes
+  hge <- includeHge(prop_hge=prop_hge, mean_hge=mean_hge, params)
+  chosen_hge <- hge[["chosen_hge"]]
+  params <- hge[["params"]]
 
 
+  # degradation rate of the size ngenes * 1
+  d_vec <- rnorm(n=ngenes, mean=0.8, sd=0.1)
+  # splicing rate of the size ngenes * 1
+  beta_vec <- rnorm(n=ngenes, mean=1.2, sd=0.1)
+
+  params_cycle = list(k_on = params$k_on[,1:ncells_cycle], k_off = params$k_off[,1:ncells_cycle], s = params$s[,1:ncells_cycle])
+  params_tree = list(k_on = params$k_on[,(ncells_cycle+1):(ncells_cycle+ncells_tree)], k_off = params$k_off[,(ncells_cycle+1):(ncells_cycle+ncells_tree)],
+                     s = params$s[,(ncells_cycle+1):(ncells_cycle+ncells_tree)])
+
+  # if the start state is not provided
+  if(is.null(start_s) | is.null(start_u) | is.null(start_state)){
+    root_state <- sample(c(1,2), size = ngenes, replace = TRUE)
+    start_s <- rep(0, ngenes)
+    start_u <- rep(0,ngenes)
+    start_state <- root_state
+  }
+
+  start_cell_time <- 0
+  # remove unstable cells
+  randpoints <- runif(n=ncells_cycle, min=0, max=1)
+
+  result <- gen_1branch(kinet_params = params_cycle, start_state = start_state, start_s = start_s, start_u = start_u,
+                        randpoints1 = randpoints, ncells1 = ncells_cycle, ngenes = ngenes, beta_vec = beta_vec,
+                        d_vec = d_vec)
+
+  final_kinetics_cycle <- list(k_on = result$kinet_params$k_on, k_off = result$kinet_params$k_off,
+                               s = result$kinet_params$s, beta = result$kinet_params$beta,
+                               degrade = result$kinet_params$d)
+
+  dynamics_cycle <- list(unspliced_steps = result$dynamics[["unspliced_steps"]], spliced_steps = result$dynamics[["spliced_steps"]], which_cells = result$dynamics[["which_cells"]])
+
+  result_cycle <-list(counts_u = result$counts_u, counts_s=result$counts_u, kinet_params=final_kinetics_cycle, state_mat=result$state_mat,
+                      cell_time=result$cell_time, velocity=result$velocity, dynamics = dynamics_cycle,
+                      backbone = evf_res_cycle[[2]]$pop, chosen_hge = chosen_hge)
+
+  # Tree part
+  # number of edges that connect to the current node
+  degrees <- table(c(phyla$edge[,1],phyla$edge[,2]))
+
+  # root node is the node with no incoming edges
+  root <- as.numeric(which(lapply(seq(1,length(degrees)), function(x){is.na(match(x, phyla$edge[,2]))}) == TRUE))
+
+  # find starting and ending cells for each branches
+  end_cell <- vector()
+  branches <- vector()
+  num_cells <- vector()
+
+  for(pop in unique(evf_res_tree[[2]]$pop)){
+    # find all cell indices correspond to the current population
+    index <- which(evf_res_tree[[2]]$pop == pop)
+    # the index is ordered according to depth originally
+    end_cell <- c(end_cell, index[length(index)])
+    branches <- rbind(branches, as.numeric(strsplit(pop, split ="_")[[1]]))
+    num_cells <- c(num_cells,length(index))
+  }
+  # create a backbone_info matrix
+  backbone <- cbind(start_node=branches[,1], end_node = branches[,2], end_cell = end_cell, start_cell = rep(0, length(end_cell)), num_cells = num_cells)
+
+  for(i in 1:dim(backbone)[1]){
+    if(backbone[i,"start_node"] == root){
+      backbone[i,"start_cell"] <- 0
+    }else{
+      index <- which(backbone[,"end_node"] == backbone[i, "start_node"])
+      backbone[i,"start_cell"] <- backbone[index,"end_cell"]
+    }
+  }
+  # order backbone according to the start cells, in case the start cells are always generated
+  backbone <- backbone[order(backbone[,"start_cell"]),,drop = FALSE]
+
+
+  # generate counts
+  # unspliced counts matrix
+  counts_u <- vector()
+  # spliced counts matrix
+  counts_s <- vector()
+  # cell developmental time
+  cell_time <- vector()
+  # count step changes
+  steps_u <- vector()
+  steps_s <- vector()
+  which_cells <- vector()
+  # promoter states
+  state_mat <- vector()
+  # RNA velocity
+  velocity <- vector()
+
+  # generate the promoter states of the root cell with dimension ngenes * 1
+  root_state <- sample(c(1,2), size = ngenes, replace = TRUE)
+
+  # loop through all branches
+  for(i in 1:dim(backbone)[1]){
+    kinetic_params <- list()
+    # indices of the cells that belongs to current backbone
+    index <- which(evf_res_tree[[2]]$pop == paste0(backbone[i, "start_node"], "_", backbone[i, "end_node"]))
+    # subset k_on, k_off and s
+
+    for(j in names(params)){
+      # dimension ngenes by #index(subset of cells)
+      kinetic_params[[j]] <- params_tree[[j]][,index]
+    }
+    # the points we use to get snapshot for each cell
+    randpoints <- runif(n=backbone[i, "num_cells"], min=0, max=1)
+
+
+    start_s = result_cycle$counts_s[,ncells_cycle]
+    start_u = result_cycle$counts_u[,ncells_cycle]
+    start_state = result_cycle$state_mat[,ncells_cycle]
+
+    if(backbone[i, "start_node"] == root){
+      if(is.null(start_s) | is.null(start_u) | is.null(start_state)){
+        start_s <- rep(0, ngenes)
+        start_u <- rep(0,ngenes)
+        start_state <- root_state
+      }
+      start_cell_time <- 0
+    }else{
+      # start cell must have already been generated, and note that the index must be larger than 1
+      start_s <- counts_s[,backbone[i,"start_cell"]]
+      start_u <- counts_u[,backbone[i,"start_cell"]]
+      start_state <- state_mat[,backbone[i,"start_cell"]]
+      start_cell_time <- cell_time[backbone[i,"start_cell"]]
+    }
+
+    result <- gen_1branch(kinet_params = kinetic_params, start_state = start_state, start_u = start_u, start_s = start_s,
+                          randpoints1 = randpoints, ncells1 = backbone[i, "num_cells"], ngenes = ngenes, beta_vec = beta_vec, d_vec = d_vec)
+
+    counts_u <- cbind(counts_u, result$counts_u)
+    counts_s <- cbind(counts_s, result$counts_s)
+    state_mat <- cbind(state_mat, result$state_mat)
+
+    steps_s <- cbind(steps_s, result$dynamics[["spliced_steps"]])
+    steps_u <- cbind(steps_u, result$dynamics[["unspliced_steps"]])
+    which_cells <- cbind(which_cells, result$dynamics[["which_cells"]])
+
+    # true time of each cell, start from zero for each branch, need to update when merged together
+    cell_time <- c(cell_time, result$cell_time + start_cell_time)
+    velocity <- cbind(velocity, result$velocity)
+  }
+
+  final_kinetics_tree <- list(k_on = params_tree[[1]], k_off = params_tree[[2]],
+                              s = params_tree[[3]], beta = beta_vec, degrade = d_vec)
+
+  dynamics_tree <- list(unspliced_steps = steps_u, spliced_steps = steps_s, which_cells = which_cells)
+
+  result_tree <- list(counts_u = counts_u, counts_s=counts_s, kinet_params=final_kinetics_tree, state_mat=state_mat,
+                      cell_time=cell_time, velocity=velocity, dynamics = dynamics_tree,
+                      backbone = evf_res_tree[[2]]$pop, chosen_hge = chosen_hge)
+
+
+  # merge results
   final_kinetics <- list(k_on = cbind(result_cycle$kinet_params$k_on, result_tree$kinet_params$k_on),
                          k_off = cbind(result_cycle$kinet_params$k_off, result_tree$kinet_params$k_off),
                          s = cbind(result_cycle$kinet_params$s, result_tree$kinet_params$s),
                          beta = result_cycle$kinet_params$beta, degrade = result_cycle$kinet_params$d)
+
+  final_dynamcis <- list(unspliced_steps = cbind(dynamics_cycle$unspliced_steps, dynamics_tree$unspliced_steps),
+                         spliced_steps = cbind(dynamics_cycle$spliced_steps, dynamics_tree$spliced_steps),
+                         which_cells = cbind(dynamics_cycle$which_cells, dynamics_tree$which_cells))
 
   result <- list(counts_u = cbind(result_cycle$counts_u, result_tree$counts_u),
                  counts_s=cbind(result_cycle$counts_s, result_tree$counts_s),
                  kinet_params=final_kinetics,
                  state_mat=cbind(result_cycle$state_mat, result_tree$state_mat),
                  cell_time=c(result_cycle$cell_time, result_cycle$cell_time[length(result_cycle$cell_time)] + result_tree$cell_time),
-                 velocity=cbind(result_cycle$velocity, result_tree$velocity))
+                 velocity=cbind(result_cycle$velocity, result_tree$velocity),
+                 dynamics=final_dynamcis,
+                 backbone=c(result_cycle$backbone, result_tree$backbone, chosen_hge = chosen_hge))
 
   return(result)
 }
