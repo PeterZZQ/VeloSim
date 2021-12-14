@@ -452,7 +452,7 @@ SimulateVeloCycle <- function(ncells_total, ngenes, start_s = NULL, start_u = NU
 
   dynamics <- list(unspliced_steps = result$dynamics[["unspliced_steps"]], spliced_steps = result$dynamics[["spliced_steps"]], which_cells = result$dynamics[["which_cells"]])
 
-  return(list(counts_u = result$counts_u, counts_s=result$counts_u, kinet_params=final_kinetics, state_mat=result$state_mat,
+  return(list(counts_u = result$counts_u, counts_s=result$counts_s, kinet_params=final_kinetics, state_mat=result$state_mat,
               cell_time=result$cell_time, velocity=result$velocity, dynamics=dynamics,
               backbone = evf_res[[2]]$pop, chosen_hge = chosen_hge))
 }
@@ -574,7 +574,7 @@ SimulateCycleTree <- function(ncells_total, ncells_cycle, ngenes, evf_center=1, 
 
   dynamics_cycle <- list(unspliced_steps = result$dynamics[["unspliced_steps"]], spliced_steps = result$dynamics[["spliced_steps"]], which_cells = result$dynamics[["which_cells"]])
 
-  result_cycle <-list(counts_u = result$counts_u, counts_s=result$counts_u, kinet_params=final_kinetics_cycle, state_mat=result$state_mat,
+  result_cycle <-list(counts_u = result$counts_u, counts_s=result$counts_s, kinet_params=final_kinetics_cycle, state_mat=result$state_mat,
                       cell_time=result$cell_time, velocity=result$velocity, dynamics = dynamics_cycle,
                       backbone = evf_res_cycle[[2]]$pop, chosen_hge = chosen_hge)
 

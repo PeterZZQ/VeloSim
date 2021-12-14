@@ -22,7 +22,7 @@ library(VeloSim)
 ## Step 1: Define the simulation parameters
 ```{r params_setting}
 # number of total cells
-ncells_total <- 500
+ncells_total <- 2000
 # number of total genes
 ngenes <- 500
 # total number of evfs: homo-evf + diff-evf
@@ -30,7 +30,7 @@ nevf <- 20
 # number of diff-evf
 n_de_evf <- 12
 # which kinetic parameters is changed according to the sampling position, n_de_evf is used in s
-vary <- "s"
+vary <- "all"
 # the standard deviation of the gaussian distribution, denote the noise size
 Sigma <- 0.1
 # the mean of the homo-evf, gaussian distribution again
@@ -58,14 +58,16 @@ plot(phyla)
 `SimulateVeloTree` is the main function of VeloSim. This function is designed specifically for tree-like trajectory structure, user can generate the unspliced, spliced counts, true developmental time and true RNA velocity and kinetic parameters using this function.
 ```{r simulation}
 # simulate data
+
 result_true <- SimulateVeloTree(ncells_total=ncells_total,ngenes=ngenes, evf_center=1,nevf=nevf,
                            phyla=phyla, randseed=randseed, n_de_evf=n_de_evf,vary=vary,Sigma=Sigma,geffect_mean=geffect_mean,
                            gene_effects_sd=gene_effects_sd,gene_effect_prob=gene_effect_prob,
                            bimod=bimod,param_realdata=param_realdata,scale_s=scale_s,
-                           prop_hge=0.015, mean_hge=5, n_unstable=25, plot = FALSE)
+                           prop_hge=0.015, mean_hge=5, n_unstable=0, plot = FALSE)
 
-# add technical noise
+
 result <- technicalNoise(result_true, capture.rate = 0.2)
+
 ```
 
 ## Step 3: Store the result
@@ -86,7 +88,7 @@ write.table(result$velocity, file = "./velocity.csv")
 # Plot with cell developmental time(pseudo-time), default PCA
 plotPseudotime(filename = "pseudotime.pdf", result)
 # Plot with RNA velocity
-plotVelo(filename = "velocity.pdf", result, arrow.length = 0.1)
+plotVelo(filename = "velocity.pdf", result, arrow.length = 1, width = 7, height = 7)
 # Plot with cell developmental time(pseudo-time), using UMAP
 plotPseudotime(filename = "pseudotime_umap.pdf", result, dr = "umap")
 ```

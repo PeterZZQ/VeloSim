@@ -15,6 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
+devtools::load_all()
 library(VeloSim)
 ```
 
@@ -23,9 +24,9 @@ library(VeloSim)
 # number of total cells
 ncells_total <- 1000
 # number of cell in cell-cycle stage
-ncells_cycle <- 300
+ncells_cycle <- 250
 # number of total genes
-ngenes <- 100
+ngenes <- 1000
 # total number of evfs: homo-evf + diff-evf
 nevf <- 20
 # number of diff-evf
@@ -47,11 +48,11 @@ param_realdata <- "zeisel.imputed"
 
 bimod <- 0
 scale_s <- 1
-randseed <- 2
+randseed <- 4
 # number of cells to be removed at the beginning of the simulation
 n_unstable <- 10
 # number of cells in the second cycle
-nextra <- 5
+nextra <- 0
 
 # read in tree
 phyla <- ape::read.tree(system.file("extdata", "Newick_ABCD.txt", package = "VeloSim"))
@@ -77,21 +78,21 @@ result <- technicalNoise(result_true, capture.rate = 0.2)
 Store the unspliced count, spliced count, cell developmental time and RNA velocity
 ```{r save_file}
 # unspliced count
-write.table(result$counts_u, file = "./counts_u.csv")
+write.table(result$counts_u, file = "./unspliced_counts.txt", sep = ",")
 # spliced count
-write.table(result$counts_s, file = "./counts_s.csv")
+write.table(result$counts_s, file = "./spliced_counts.txt", sep = ",")
 # cell developmental time
-write.table(result$cell_time, file = "./pseudo_time.csv")
+write.table(result$cell_time, file = "./pseudo_time.txt", sep = ",")
 # RNA velocity
-write.table(result$velocity, file = "./velocity.csv")
+write.table(result$velocity, file = "./true_velo.txt", sep = ",")
 ```
 
 ## Step 4: Plot the result
 ```{r plotting}
 # Plot with cell developmental time(pseudo-time), default PCA
-plotPseudotime(filename = "pseudotime.pdf", result)
+plotPseudotime(filename = "pseudotime.pdf", result_true)
 # Plot with RNA velocity
-plotVelo(filename = "velocity.pdf", result, arrow.length = 0.1)
+plotVelo(filename = "velocity.pdf", result_true, arrow.length = 0.1)
 # Plot with cell developmental time(pseudo-time), using UMAP
-plotPseudotime(filename = "pseudotime_umap.pdf", result, dr = "umap")
+plotPseudotime(filename = "pseudotime_umap.pdf", result_true, dr = "umap")
 ```

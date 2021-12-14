@@ -15,6 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
+devtools::load_all()
 library(VeloSim)
 ```
 ## Step 1: Define the simulation parameters
@@ -45,7 +46,7 @@ param_realdata <- "zeisel.imputed"
 
 bimod <- 0
 scale_s <- 1
-randseed <- 1
+randseed <- 3
 # number of cells in the second cycle
 nextra <- 100
 # number of cells to be removed at the beginning of the simulation
@@ -83,7 +84,7 @@ write.table(result$velocity, file = "./velocity.csv")
 # Plot with cell developmental time(pseudo-time), default PCA
 plotPseudotime(filename = "pseudotime.pdf", result)
 # Plot with RNA velocity
-plotVelo(filename = "velocity.pdf", result, arrow.length = 0.1)
+plotVelo(filename = "velocity.pdf", result, arrow.length = 0.3, width = 7, height = 7)
 # Plot with cell developmental time(pseudo-time), using UMAP
 plotPseudotime(filename = "pseudotime_umap.pdf", result, dr = "umap")
 ```
